@@ -171,11 +171,20 @@ Desktop or start a new Claude Code session.
 claude mcp add jira-multisite -s user \
   -e ATLASSIAN_EMAIL=you@example.com \
   -e ATLASSIAN_API_TOKEN=your-token \
-  -- ~/code/jira-multisite-mcp/bin/jira-multisite-mcp
+  -- /absolute/path/to/ruby ~/code/jira-multisite-mcp/bin/jira-multisite-mcp
 ```
 
 `-s user` makes it available in all your projects. Run `/mcp` inside Claude
 Code to check that `jira-multisite` is connected.
+
+**Use the absolute path to Ruby here too** (`mise which ruby`,
+`rbenv which ruby` or `which ruby`, run from the `jira-multisite-mcp`
+folder). Claude Code starts the server from the project you have open. If
+that project pins another Ruby with mise, rbenv, asdf or chruby, the version
+manager switches to it, that Ruby doesn't have the server's gems, and the
+server dies at startup: it works in some projects and shows
+"Connection closed" in others. An absolute path makes the server use the
+same Ruby everywhere.
 
 #### Claude Desktop
 
@@ -338,7 +347,8 @@ It prints the loaded sites and exits. Common problems:
 | `Sites file not found` | Create `~/.config/jira-multisite-mcp/sites.yml`, or set `JIRA_SITES_FILE`. |
 | `environment variable ATLASSIAN_API_TOKEN is empty` | The client config lacks the `env` entry, or the variable name in `token_env` is wrong. |
 | Server never appears in Claude Desktop | Ruby path not absolute, JSON invalid, or the app was open while you edited. Check the log file. |
-| `cannot load such file -- mcp` | `bundle install` not run, or Claude uses a different Ruby than the one you installed the gems with. After upgrading Ruby, run `bundle install` again. |
+| Works in some Claude Code projects, "Connection closed" in others | Those projects pin another Ruby and your version manager switches to it. Register the server with the absolute path to Ruby (see [Claude Code](#claude-code)). The log line `could not load its gems` shows which Ruby was used. |
+| `could not load its gems` / `cannot load such file -- mcp` | `bundle install` not run, or Claude uses a different Ruby than the one you installed the gems with. Use the absolute path to Ruby in the client config. After upgrading Ruby, run `bundle install` again. |
 | `Authentication failed` on every site | Token expired or revoked, or wrong email. |
 | `Authentication failed` / `Not found` on one site | Your account has no access to it, or the URL is wrong. |
 | Done issues show up as open | The site's workflow puts "Done" in the wrong status category. Fix it in Jira: Space settings → Workflows → edit → status → Category. |

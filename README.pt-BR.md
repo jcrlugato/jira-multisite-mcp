@@ -173,11 +173,20 @@ Claude Desktop ou abra uma nova sessão do Claude Code.
 claude mcp add jira-multisite -s user \
   -e ATLASSIAN_EMAIL=voce@exemplo.com \
   -e ATLASSIAN_API_TOKEN=seu-token \
-  -- ~/code/jira-multisite-mcp/bin/jira-multisite-mcp
+  -- /caminho/absoluto/do/ruby ~/code/jira-multisite-mcp/bin/jira-multisite-mcp
 ```
 
 O `-s user` deixa o servidor disponível em todos os seus projetos. Rode `/mcp`
 dentro do Claude Code para conferir se o `jira-multisite` está conectado.
+
+**Use o caminho absoluto do Ruby aqui também** (`mise which ruby`,
+`rbenv which ruby` ou `which ruby`, rodado dentro da pasta do
+`jira-multisite-mcp`). O Claude Code inicia o servidor a partir do projeto que
+está aberto. Se esse projeto fixa outra versão do Ruby com mise, rbenv, asdf ou
+chruby, o gerenciador de versões troca para ela, esse Ruby não tem as gems do
+servidor, e o servidor morre ao iniciar: funciona em alguns projetos e mostra
+"Connection closed" em outros. Com o caminho absoluto, o servidor usa o mesmo
+Ruby em qualquer projeto.
 
 #### Claude Desktop
 
@@ -347,7 +356,8 @@ Ele imprime os sites carregados e termina. Problemas comuns:
 | `Sites file not found` | Crie `~/.config/jira-multisite-mcp/sites.yml` ou defina `JIRA_SITES_FILE`. |
 | `environment variable ATLASSIAN_API_TOKEN is empty` | Falta a entrada `env` na configuração do cliente, ou o nome da variável em `token_env` está errado. |
 | O servidor não aparece no Claude Desktop | Caminho do Ruby não absoluto, JSON inválido, ou o app estava aberto durante a edição. Veja o arquivo de log. |
-| `cannot load such file -- mcp` | Faltou rodar `bundle install`, ou o Claude usa um Ruby diferente daquele em que você instalou as gems. Depois de atualizar o Ruby, rode `bundle install` de novo. |
+| Funciona em alguns projetos do Claude Code e mostra "Connection closed" em outros | Esses projetos fixam outra versão do Ruby, e o gerenciador de versões troca para ela. Registre o servidor com o caminho absoluto do Ruby (veja [Claude Code](#claude-code)). A linha de log `could not load its gems` mostra qual Ruby foi usado. |
+| `could not load its gems` / `cannot load such file -- mcp` | Faltou rodar `bundle install`, ou o Claude usa um Ruby diferente daquele em que você instalou as gems. Use o caminho absoluto do Ruby na configuração do cliente. Depois de atualizar o Ruby, rode `bundle install` de novo. |
 | `Authentication failed` em todos os sites | Token expirado ou revogado, ou e-mail errado. |
 | `Authentication failed` / `Not found` em um site | A sua conta não tem acesso a ele, ou a URL está errada. |
 | Issues concluídas aparecem como abertas | O workflow do site coloca "Done" na categoria de status errada. Corrija no Jira: Space settings → Workflows → editar → status → Category. |

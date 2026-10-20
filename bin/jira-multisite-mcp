@@ -4,26 +4,47 @@
 # stdout is reserved for the protocol. Anything human-readable goes to
 # stderr, which the Claude apps write to their MCP logs.
 
-# Claude launches this from an arbitrary working directory, so point Bundler
-# at our own Gemfile explicitly. Without a lockfile (no `bundle install`
-# yet) we fall back to globally installed gems.
-gemfile = File.expand_path("../Gemfile", __dir__)
-if File.exist?("#{gemfile}.lock")
-  ENV["BUNDLE_GEMFILE"] ||= gemfile
-  require "bundler/setup"
+require "rbconfig"
+
+# When the server cannot start, the client only reports "Connection closed".
+# Say what went wrong, with the Ruby that was actually used.
+def abort_with(message)
+  warn "jira-multisite-mcp: #{message}"
+  warn "jira-multisite-mcp: Ruby #{RUBY_VERSION} at #{RbConfig.ruby}"
+  exit 1
 end
 
-require_relative "../lib/jira_multisite"
+RUBY_HINT = "Register the server with the absolute path of the Ruby you ran `bundle install` with " \
+            "(e.g. the output of `mise which ruby`). A version manager may pick another Ruby " \
+            "inside projects that pin their own version. See README > Troubleshooting."
+
+if Gem::Version.new(RUBY_VERSION) < Gem::Version.new("3.1")
+  abort_with("needs Ruby 3.1 or newer. #{RUBY_HINT}")
+end
+
+# Claude launches this from an arbitrary working directory, which may be
+# another Ruby project with its own Gemfile. Always use ours. Without a
+# lockfile (no `bundle install` yet) we fall back to globally installed gems.
+gemfile = File.expand_path("../Gemfile", __dir__)
+begin
+  if File.exist?("#{gemfile}.lock")
+    ENV["BUNDLE_GEMFILE"] = gemfile
+    require "bundler/setup"
+  end
+  require_relative "../lib/jira_multisite"
+rescue StandardError, LoadError => e
+  abort_with("could not load its gems (#{e.class}: #{e.message.lines.first.strip}). " \
+             "Run `bundle install` in #{File.dirname(gemfile)} with this Ruby, or: #{RUBY_HINT}")
+end
 
 begin
   config = JiraMultisite::Config.load
 rescue JiraMultisite::ConfigError => e
-  warn "jira-multisite-mcp: #{e.message}"
-  exit 1
+  abort_with(e.message)
 end
 
 registry = JiraMultisite::Registry.new(config)
 server = JiraMultisite.build_server(registry: registry)
 
-warn "jira-multisite-mcp #{JiraMultisite::VERSION}: sites #{config.sites.keys.join(', ')}"
+warn "jira-multisite-mcp #{JiraMultisite::VERSION}: Ruby #{RUBY_VERSION}, sites #{config.sites.keys.join(', ')}"
 MCP::Server::Transports::StdioTransport.new(server).open
