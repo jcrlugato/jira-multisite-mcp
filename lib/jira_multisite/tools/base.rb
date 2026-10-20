@@ -21,18 +21,37 @@ module JiraMultisite
         description: "Issue key, e.g. \"ABC-123\".",
       }.freeze
 
+      PROJECT_PARAM = {
+        type: "string",
+        description: "Project key, e.g. \"ABC\" (see list_projects).",
+      }.freeze
+
+      # Appended to Jira's error when it rejects these fields, so the model
+      # knows where to find valid values.
+      FIELD_HINTS = {
+        "fixVersions" => "Call list_versions to see valid version names.",
+        "parent" => "Find valid parents with search_issues, e.g. JQL \"project = ABC AND issuetype = Epic\". " \
+                    "A subtask's parent must be a standard issue and can't be removed.",
+      }.freeze
+
       class << self
         def call(server_context:, **args)
           registry = server_context[:registry]
           ok(run(registry, **args))
-        rescue ApiError, ConfigError, ArgumentError => e
-          MCP::Tool::Response.new([{ type: "text", text: e.message }], error: true)
+        rescue ApiError => e
+          error([e.message, *FIELD_HINTS.values_at(*e.field_errors.keys).compact].join(" "))
+        rescue ConfigError, ArgumentError => e
+          error(e.message)
         end
 
         private
 
         def ok(payload)
           MCP::Tool::Response.new([{ type: "text", text: JSON.pretty_generate(payload) }])
+        end
+
+        def error(text)
+          MCP::Tool::Response.new([{ type: "text", text: text }], error: true)
         end
 
         def compact_issue(registry, site, issue)

@@ -38,6 +38,7 @@ YAML come from the standard library.
 - "Create a bug on acme: checkout fails on Safari 18. Assign it to me."
 - "Move SHOP-41 to In Review and comment that the fix is on staging."
 - "Which transitions are available for SP-12?"
+- "Put SHOP-41 in epic SHOP-10 and set fix version v1.0."
 
 ## How it works
 
@@ -268,10 +269,11 @@ Ask, in this order. Each step tests one layer:
 |---|---|
 | `list_sites` | Configured sites and guidelines. No network call. |
 | `list_projects` | Project keys and names visible to you on a site. |
+| `list_versions` | A project's versions with status (released, unreleased, archived) and release date. |
 | `search_issues` | JQL search. With `site`: one site, paginated. **Without `site`: all sites in parallel**; a failing site is reported and the others still answer. |
 | `get_issue` | One issue: fields, description and the latest comments, as plain text. |
-| `create_issue` | Create with type, description, labels, priority, assignee, parent. |
-| `update_issue` | Change summary, description, labels, priority or assignee. Only the fields you pass change. |
+| `create_issue` | Create with type, description, labels, priority, assignee, parent, fix versions. |
+| `update_issue` | Change summary, description, labels, priority, assignee, parent or fix versions. Only the fields you pass change. |
 | `transition_issue` | Change status. `to` matches the transition name or the target status, case-insensitively. Without `to`, lists what is available now. |
 | `add_comment` | Comment on an issue. |
 
@@ -283,8 +285,13 @@ Details worth knowing:
 - **Assignees** accept `me`, `none` (unassign), an accountId, or a name or
   email. A name that matches several people returns the options instead of
   guessing.
+- **Parent and fix versions.** `parent` takes an issue key (usually an
+  epic); on `update_issue`, `none` removes it (not possible for subtasks).
+  `fix_versions` takes version names from `list_versions`; on `update_issue`
+  the list replaces the current versions, and `[]` clears them.
 - **Errors are written for the model.** A wrong transition lists the valid
-  ones; a 401 says which site and suggests checking the token. Claude reads
+  ones; a 401 says which site and suggests checking the token; a rejected
+  version or parent points to `list_versions` or an epic search. Claude reads
   them and corrects itself.
 - Tools carry MCP annotations (read-only vs. write), so clients can ask for
   confirmation before writes.
@@ -366,7 +373,7 @@ It prints the loaded sites and exits. Common problems:
 
 - Remote mode (Streamable HTTP + OAuth) so it can be added as a custom
   connector in claude.ai, with a small web panel to manage connections.
-- Tools for sprints, versions and custom fields.
+- Tools for sprints and custom fields.
 
 Ideas and pull requests are welcome.
 

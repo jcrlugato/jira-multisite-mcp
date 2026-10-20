@@ -38,6 +38,7 @@ vêm da biblioteca padrão.
 - "Cria um bug no acme: o checkout falha no Safari 18. Atribui a mim."
 - "Move a SHOP-41 para In Review e comenta que a correção está em staging."
 - "Quais transições estão disponíveis para a SP-12?"
+- "Coloca a SHOP-41 no épico SHOP-10 e na fix version v1.0."
 
 ## Como funciona
 
@@ -275,10 +276,11 @@ Peça nesta ordem. Cada passo testa uma camada:
 |---|---|
 | `list_sites` | Sites configurados e diretrizes. Sem chamada de rede. |
 | `list_projects` | Chaves e nomes dos projetos visíveis para você em um site. |
+| `list_versions` | Versões de um projeto, com status (lançada, não lançada, arquivada) e data de lançamento. |
 | `search_issues` | Busca por JQL. Com `site`: um site, com paginação. **Sem `site`: todos os sites em paralelo**; um site que falha é reportado e os outros continuam respondendo. |
 | `get_issue` | Uma issue: campos, descrição e os últimos comentários, em texto simples. |
-| `create_issue` | Cria com tipo, descrição, labels, prioridade, responsável e issue pai. |
-| `update_issue` | Altera título, descrição, labels, prioridade ou responsável. Só os campos informados mudam. |
+| `create_issue` | Cria com tipo, descrição, labels, prioridade, responsável, issue pai e fix versions. |
+| `update_issue` | Altera título, descrição, labels, prioridade, responsável, issue pai ou fix versions. Só os campos informados mudam. |
 | `transition_issue` | Muda o status. `to` compara com o nome da transição ou com o status de destino, sem diferenciar maiúsculas. Sem `to`, lista o que está disponível agora. |
 | `add_comment` | Comenta em uma issue. |
 
@@ -290,9 +292,15 @@ Detalhes que vale saber:
 - **Responsável** aceita `me`, `none` (remove o responsável), um accountId ou
   um nome ou e-mail. Se um nome corresponder a várias pessoas, a tool devolve
   as opções em vez de chutar.
+- **Issue pai e fix versions.** `parent` recebe a chave de uma issue
+  (normalmente um épico); no `update_issue`, `none` remove o pai (não vale
+  para subtarefas). `fix_versions` recebe nomes de versão vindos do
+  `list_versions`; no `update_issue` a lista substitui as versões atuais, e
+  `[]` remove todas.
 - **Os erros são escritos para o modelo.** Uma transição inválida lista as
-  válidas; um 401 diz qual site falhou e sugere conferir o token. O Claude lê
-  a mensagem e se corrige.
+  válidas; um 401 diz qual site falhou e sugere conferir o token; uma versão ou
+  issue pai recusada indica o `list_versions` ou uma busca por épicos. O
+  Claude lê a mensagem e se corrige.
 - As tools têm anotações MCP (somente leitura ou escrita), para que os
   clientes possam pedir confirmação antes de alterações.
 
@@ -376,7 +384,7 @@ Ele imprime os sites carregados e termina. Problemas comuns:
 - Modo remoto (Streamable HTTP + OAuth), para ser adicionado como conector
   personalizado no claude.ai, com um painel web simples para gerenciar as
   conexões.
-- Tools para sprints, versões e campos personalizados.
+- Tools para sprints e campos personalizados.
 
 Ideias e pull requests são bem-vindos.
 

@@ -6,10 +6,13 @@ module JiraMultisite
   # Raised for any non-2xx answer from Jira. The message is written for the
   # model to read: it says what failed and, when obvious, what to try next.
   class ApiError < StandardError
-    attr_reader :status
+    # `field_errors` is Jira's per-field `errors` hash (e.g. {"parent" => "..."}),
+    # so tools can add hints without parsing the message.
+    attr_reader :status, :field_errors
 
-    def initialize(status, message)
+    def initialize(status, message, field_errors = {})
       @status = status
+      @field_errors = field_errors
       super(message)
     end
   end
@@ -47,7 +50,8 @@ module JiraMultisite
       parsed = raw.to_s.strip.empty? ? nil : JSON.parse(raw)
       return parsed if (200..299).cover?(status)
 
-      raise ApiError.new(status, error_message(status, parsed))
+      field_errors = parsed.is_a?(Hash) && parsed["errors"].is_a?(Hash) ? parsed["errors"] : {}
+      raise ApiError.new(status, error_message(status, parsed), field_errors)
     rescue JSON::ParserError
       raise ApiError.new(status, "Jira returned HTTP #{status} with a non-JSON body")
     end

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `list_versions` tool: a project's versions with status and release date.
+- `update_issue` accepts `parent` (an issue key, or `none` to remove it).
+- `create_issue` and `update_issue` accept `fix_versions` (version names;
+  on update the list replaces the current versions).
+- When Jira rejects a fix version or a parent, the error tells Claude to
+  call `list_versions` or search for epics.
+
 ### Fixed
 
 - Startup failures now explain themselves in the client log (which Ruby was
