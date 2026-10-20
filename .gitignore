@@ -1,0 +1,4 @@
+/config/sites.yml
+/.bundle/
+/vendor/
+.env

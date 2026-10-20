@@ -1,0 +1,37 @@
+# jira-multisite-mcp configuration
+#
+# Copy to ~/.config/jira-multisite-mcp/sites.yml (or point the
+# JIRA_SITES_FILE environment variable at another path) and edit.
+#
+# Tokens never go in this file. They come from environment variables
+# (ATLASSIAN_API_TOKEN by default), so this file is safe to back up.
+
+# Optional. How you want Claude to write issues, on every site. Free text:
+# Claude reads it at connection time and follows it when creating issues.
+guidelines: |
+  Write issues in English.
+  Title: "[Area] Verb + object", e.g. "[API] Return 404 for unknown orders".
+  Description sections: Context, What to do, Acceptance criteria (as a list).
+  Story = user-facing feature; Task = technical work; Bug = something that worked and broke.
+  Always show me the draft (site, project, type, title, description) and wait
+  for my confirmation before creating the issue.
+
+sites:
+  # The key is the alias you and Claude use ("what's open on acme?").
+  # Lowercase letters, digits, - and _.
+  acme:
+    url: https://acme.atlassian.net
+    description: Acme Corp (client)   # optional, helps Claude match names
+    guidelines: |                     # optional, added to the general ones
+      Default project: SHOP.
+      Areas: [Storefront], [Checkout], [Admin].
+
+  side-project:
+    url: https://side-project.atlassian.net
+
+  # A site under a different Atlassian account: set its email and the name
+  # of the environment variable that holds its token.
+  # other-client:
+  #   url: https://other-client.atlassian.net
+  #   email: you@other-client.com
+  #   token_env: OTHER_CLIENT_ATLASSIAN_TOKEN

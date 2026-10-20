@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+# Entry point for Claude Desktop / Claude Code: speaks MCP over stdio.
+#
+# stdout is reserved for the protocol. Anything human-readable goes to
+# stderr, which the Claude apps write to their MCP logs.
+
+# Claude launches this from an arbitrary working directory, so point Bundler
+# at our own Gemfile explicitly. Without a lockfile (no `bundle install`
+# yet) we fall back to globally installed gems.
+gemfile = File.expand_path("../Gemfile", __dir__)
+if File.exist?("#{gemfile}.lock")
+  ENV["BUNDLE_GEMFILE"] ||= gemfile
+  require "bundler/setup"
+end
+
+require_relative "../lib/jira_multisite"
+
+begin
+  config = JiraMultisite::Config.load
+rescue JiraMultisite::ConfigError => e
+  warn "jira-multisite-mcp: #{e.message}"
+  exit 1
+end
+
+registry = JiraMultisite::Registry.new(config)
+server = JiraMultisite.build_server(registry: registry)
+
+warn "jira-multisite-mcp #{JiraMultisite::VERSION}: sites #{config.sites.keys.join(', ')}"
+MCP::Server::Transports::StdioTransport.new(server).open
