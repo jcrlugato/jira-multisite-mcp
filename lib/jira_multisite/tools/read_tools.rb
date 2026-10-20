@@ -31,6 +31,30 @@ module JiraMultisite
       end
     end
 
+    class ListVersions < Base
+      tool_name "list_versions"
+      description <<~DESC.strip
+        List a project's versions (releases) with status and release date. Call this
+        before setting fix_versions, to use names that exist.
+      DESC
+      input_schema(
+        properties: {
+          site: SITE_PARAM,
+          project: PROJECT_PARAM,
+        },
+        required: %w[site project],
+      )
+      annotations(**READ_ONLY)
+
+      def self.run(registry, site:, project:)
+        versions = registry.client(site).get("/project/#{project}/versions").map do |v|
+          status = v["archived"] ? "archived" : (v["released"] ? "released" : "unreleased")
+          { name: v["name"], status: status, release_date: v["releaseDate"] }.compact
+        end
+        { site: site, project: project, versions: versions }
+      end
+    end
+
     class SearchIssues < Base
       FIELDS = %w[summary status issuetype priority assignee updated].freeze
 

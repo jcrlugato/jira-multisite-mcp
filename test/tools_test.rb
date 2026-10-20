@@ -14,7 +14,7 @@ class ToolsTest < Minitest::Test
   def test_lists_tools_with_schemas
     build({})
     tools = @server.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" })[:result][:tools]
-    assert_equal %w[list_sites list_projects search_issues get_issue create_issue update_issue transition_issue add_comment],
+    assert_equal %w[list_sites list_projects list_versions search_issues get_issue create_issue update_issue transition_issue add_comment],
                  tools.map { |t| t[:name] }
     assert_equal true, tools.first[:annotations][:readOnlyHint]
   end
@@ -150,6 +150,74 @@ class ToolsTest < Minitest::Test
     error, text = call_tool("update_issue", { site: "alpha", key: "AL-1" })
     assert error
     assert_match(/Nothing to update/, text)
+  end
+
+  def test_update_issue_sets_and_removes_parent
+    build({ "PUT alpha.atlassian.net/rest/api/3/issue/AL-1" => [204, nil] })
+
+    _, data = call_tool("update_issue", { site: "alpha", key: "AL-1", parent: " AL-5 " })
+    assert_equal({ "fields" => { "parent" => { "key" => "AL-5" } } }, @http.requests.last[:body])
+    assert_equal ["parent"], data["updated"]
+
+    error, data = call_tool("update_issue", { site: "alpha", key: "AL-1", parent: "None" })
+    refute error
+    assert_equal({ "fields" => {}, "update" => { "parent" => [{ "set" => { "none" => true } }] } },
+                 @http.requests.last[:body])
+    assert_equal ["parent"], data["updated"]
+
+    error, text = call_tool("update_issue", { site: "alpha", key: "AL-1", parent: " " })
+    assert error
+    assert_match(/parent is empty/, text)
+  end
+
+  def test_fix_versions_on_create_and_update
+    build({
+      "POST alpha.atlassian.net/rest/api/3/issue" => [201, { "id" => "1", "key" => "AL-9" }],
+      "PUT alpha.atlassian.net/rest/api/3/issue/AL-9" => [204, nil],
+    })
+
+    call_tool("create_issue", { site: "alpha", project: "AL", summary: "New", fix_versions: ["v1.0"] })
+    assert_equal [{ "name" => "v1.0" }], @http.requests.last[:body]["fields"]["fixVersions"]
+
+    call_tool("update_issue", { site: "alpha", key: "AL-9", fix_versions: %w[v1.0 v1.1] })
+    assert_equal [{ "name" => "v1.0" }, { "name" => "v1.1" }], @http.requests.last[:body]["fields"]["fixVersions"]
+
+    call_tool("update_issue", { site: "alpha", key: "AL-9", fix_versions: [] })
+    assert_equal [], @http.requests.last[:body]["fields"]["fixVersions"]
+  end
+
+  def test_list_versions_reports_status_and_release_date
+    versions = [
+      { "name" => "v1.0", "released" => true, "archived" => false, "releaseDate" => "2026-09-01" },
+      { "name" => "v0.9", "released" => true, "archived" => true },
+      { "name" => "v1.1", "released" => false, "archived" => false, "description" => "Next" },
+    ]
+    build({ "GET alpha.atlassian.net/rest/api/3/project/AL/versions" => [200, versions] })
+
+    error, data = call_tool("list_versions", { site: "alpha", project: "AL" })
+    refute error
+    assert_equal [
+      { "name" => "v1.0", "status" => "released", "release_date" => "2026-09-01" },
+      { "name" => "v0.9", "status" => "archived" },
+      { "name" => "v1.1", "status" => "unreleased" },
+    ], data["versions"]
+  end
+
+  def test_rejected_version_or_parent_points_to_lookup_tools
+    build({
+      "POST alpha.atlassian.net/rest/api/3/issue" =>
+        [400, { "errorMessages" => [], "errors" => { "fixVersions" => "Version name 'v9' is not valid" } }],
+      "PUT alpha.atlassian.net/rest/api/3/issue/AL-1" =>
+        [400, { "errorMessages" => [], "errors" => { "parent" => "Could not find issue by id or key." } }],
+    })
+
+    error, text = call_tool("create_issue", { site: "alpha", project: "AL", summary: "x", fix_versions: ["v9"] })
+    assert error
+    assert_match(/fixVersions: Version name 'v9' is not valid.*Call list_versions/, text)
+
+    error, text = call_tool("update_issue", { site: "alpha", key: "AL-1", parent: "AL-404" })
+    assert error
+    assert_match(/parent: Could not find issue.*search_issues.*issuetype = Epic/, text)
   end
 
   def test_transition_by_status_name_and_listing

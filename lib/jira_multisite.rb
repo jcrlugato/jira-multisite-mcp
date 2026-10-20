@@ -14,6 +14,7 @@ module JiraMultisite
   TOOLS = [
     Tools::ListSites,
     Tools::ListProjects,
+    Tools::ListVersions,
     Tools::SearchIssues,
     Tools::GetIssue,
     Tools::CreateIssue,

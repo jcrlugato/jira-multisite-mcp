@@ -7,6 +7,12 @@ module JiraMultisite
       description: "\"me\", \"none\" (unassign), an accountId, or a name/email to look up.",
     }.freeze
 
+    FIX_VERSIONS_PARAM = {
+      type: "array",
+      items: { type: "string" },
+      description: "Fix version names, e.g. [\"v1.0\"] (see list_versions).",
+    }.freeze
+
     class CreateIssue < Base
       tool_name "create_issue"
       description <<~DESC.strip
@@ -17,7 +23,7 @@ module JiraMultisite
       input_schema(
         properties: {
           site: SITE_PARAM,
-          project: { type: "string", description: "Project key, e.g. \"ABC\" (see list_projects)." },
+          project: PROJECT_PARAM,
           summary: { type: "string" },
           issue_type: { type: "string", description: "Issue type name as shown in Jira. Default \"Task\"." },
           description: { type: "string" },
@@ -25,13 +31,14 @@ module JiraMultisite
           priority: { type: "string", description: "Priority name, e.g. \"High\"." },
           assignee: ASSIGNEE_PARAM,
           parent: { type: "string", description: "Parent issue key (epic, or story for a subtask)." },
+          fix_versions: FIX_VERSIONS_PARAM,
         },
         required: %w[site project summary],
       )
       annotations(**WRITE)
 
       def self.run(registry, site:, project:, summary:, issue_type: "Task", description: nil,
-                   labels: nil, priority: nil, assignee: nil, parent: nil)
+                   labels: nil, priority: nil, assignee: nil, parent: nil, fix_versions: nil)
         fields = {
           project: { key: project },
           issuetype: { name: issue_type },
@@ -41,6 +48,7 @@ module JiraMultisite
         fields[:labels] = labels if labels
         fields[:priority] = { name: priority } if priority
         fields[:parent] = { key: parent } if parent
+        fields[:fixVersions] = fix_versions.map { |name| { name: name } } if fix_versions
         fields[:assignee] = { accountId: resolve_account_id(registry, site, assignee) } if assignee
 
         created = registry.client(site).post("/issue", { fields: fields })
@@ -50,7 +58,10 @@ module JiraMultisite
 
     class UpdateIssue < Base
       tool_name "update_issue"
-      description "Change fields of an issue. Only the fields you pass are touched. To change status use transition_issue."
+      description <<~DESC.strip
+        Change fields of an issue, including its parent (epic) and fix versions.
+        Only the fields you pass are touched. To change status use transition_issue.
+      DESC
       input_schema(
         properties: {
           site: SITE_PARAM,
@@ -60,6 +71,8 @@ module JiraMultisite
           labels: { type: "array", items: { type: "string" }, description: "Replaces the label list." },
           priority: { type: "string" },
           assignee: ASSIGNEE_PARAM,
+          parent: { type: "string", description: "Parent issue key, e.g. \"ABC-12\", or \"none\" to remove the parent." },
+          fix_versions: FIX_VERSIONS_PARAM.merge(description: "Replaces the fix versions, e.g. [\"v1.0\"] (see list_versions)."),
         },
         required: %w[site key],
       )
@@ -73,13 +86,29 @@ module JiraMultisite
         fields[:description] = Adf.from_text(changes[:description]) if changes.key?(:description)
         fields[:labels] = changes[:labels] if changes.key?(:labels)
         fields[:priority] = { name: changes[:priority] } if changes.key?(:priority)
+        fields[:fixVersions] = changes[:fix_versions].map { |name| { name: name } } if changes.key?(:fix_versions)
         if changes.key?(:assignee)
           id = resolve_account_id(registry, site, changes[:assignee])
           fields[:assignee] = id && { accountId: id }
         end
 
-        registry.client(site).put("/issue/#{key}", { fields: fields })
-        { site: site, key: key, updated: fields.keys, url: registry.browse_url(site, key) }
+        # Jira removes a parent only through the `update` operation syntax.
+        update = {}
+        if changes.key?(:parent)
+          parent = changes[:parent].strip
+          raise ArgumentError, "parent is empty: pass an issue key, or \"none\" to remove the parent." if parent.empty?
+
+          if parent.casecmp?("none")
+            update[:parent] = [{ set: { none: true } }]
+          else
+            fields[:parent] = { key: parent }
+          end
+        end
+
+        body = { fields: fields }
+        body[:update] = update unless update.empty?
+        registry.client(site).put("/issue/#{key}", body)
+        { site: site, key: key, updated: fields.keys + update.keys, url: registry.browse_url(site, key) }
       end
     end
 
