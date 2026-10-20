@@ -1,0 +1,31 @@
+GEM
+  remote: https://rubygems.org/
+  specs:
+    bigdecimal (4.1.3)
+    hana (1.3.7)
+    json_schemer (2.5.0)
+      bigdecimal
+      hana (~> 1.3)
+      regexp_parser (~> 2.0)
+      simpleidn (~> 0.2)
+    mcp (1.8.0)
+      json_schemer (>= 2.4)
+    minitest (5.27.0)
+    rake (13.4.2)
+    regexp_parser (2.13.1)
+    simpleidn (0.3.0)
+
+PLATFORMS
+  arm64-darwin-23
+  ruby
+
+DEPENDENCIES
+  mcp (~> 1.7)
+  minitest (~> 5.20)
+  rake
+
+RUBY VERSION
+   ruby 3.4.11p137
+
+BUNDLED WITH
+   2.6.9
