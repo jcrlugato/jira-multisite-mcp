@@ -18,6 +18,7 @@ All notable changes to this project are documented here. The format follows
 
 - README: register the server in Claude Code with the absolute path to Ruby,
   so projects that pin another Ruby (mise, rbenv, asdf) don't break it.
+- The version now lives in a `VERSION` file at the repository root.
 
 ## [0.1.0] - 2026-10-20
 
