@@ -9,7 +9,8 @@ require_relative "jira_multisite/tools/read_tools"
 require_relative "jira_multisite/tools/write_tools"
 
 module JiraMultisite
-  VERSION = "0.1.0".freeze
+  # Single source of the release version, kept in the VERSION file at the repo root.
+  VERSION = File.read(File.expand_path("../VERSION", __dir__)).strip.freeze
 
   TOOLS = [
     Tools::ListSites,

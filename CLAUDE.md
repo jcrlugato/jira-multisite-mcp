@@ -44,4 +44,4 @@ ATLASSIAN_EMAIL=you@example.com ATLASSIAN_API_TOKEN=x bin/jira-multisite-mcp < /
 - stdout is reserved for the MCP protocol: never `puts`/`p` in the server; diagnostics go to stderr with `warn`.
 - Tool errors are for the model to read: raise `ArgumentError` with a message that says how to fix the call.
 - New tools follow `CONTRIBUTING.md`: subclass `Tools::Base`, add to `JiraMultisite::TOOLS`, add a test in `test/tools_test.rb`.
-- Any user-facing change updates `README.md` and `README.pt-BR.md` together, and `CHANGELOG.md` under "Unreleased". The version lives in `JiraMultisite::VERSION`.
+- Any user-facing change updates `README.md` and `README.pt-BR.md` together, and `CHANGELOG.md` under "Unreleased". The version lives in the `VERSION` file (read by `JiraMultisite::VERSION`).
