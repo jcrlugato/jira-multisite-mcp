@@ -15,7 +15,8 @@ module JiraMultisite
   #
   # Tokens never live in the YAML file: each site reads its token from an
   # environment variable (ATLASSIAN_API_TOKEN by default, or the one named in
-  # `token_env`), so the config file is safe to back up or share.
+  # `token_env`), so the config file is safe to back up or share. EnvFile can
+  # fill those variables from a .env file before this runs.
   class Config
     DEFAULT_PATH = File.join(Dir.home, ".config", "jira-multisite-mcp", "sites.yml")
     ALIAS_FORMAT = /\A[a-z0-9][a-z0-9_-]*\z/
@@ -63,7 +64,10 @@ module JiraMultisite
       token = env[token_env]
 
       raise ConfigError, "Site '#{name}': no email (set ATLASSIAN_EMAIL or `email:`)" if email.to_s.empty?
-      raise ConfigError, "Site '#{name}': environment variable #{token_env} is empty" if token.to_s.empty?
+      if token.to_s.empty?
+        raise ConfigError, "Site '#{name}': environment variable #{token_env} is empty " \
+                           "(set it in a .env file or in your MCP client config; see README)"
+      end
 
       Site.new(name: name, url: url, email: email, token: token, description: attrs["description"],
                guidelines: text_or_nil(attrs["guidelines"], "sites.#{name}.guidelines"))

@@ -1,6 +1,7 @@
 require "mcp"
 
 require_relative "jira_multisite/config"
+require_relative "jira_multisite/env_file"
 require_relative "jira_multisite/client"
 require_relative "jira_multisite/adf"
 require_relative "jira_multisite/registry"

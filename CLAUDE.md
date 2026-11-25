@@ -13,13 +13,14 @@ bundle install
 bundle exec rake test                                                        # full suite
 bundle exec ruby -Ilib -Itest test/tools_test.rb                             # one file
 bundle exec ruby -Ilib -Itest test/tools_test.rb -n test_list_sites_needs_no_network  # one test
-ATLASSIAN_EMAIL=you@example.com ATLASSIAN_API_TOKEN=x bin/jira-multisite-mcp < /dev/null  # startup smoke test
+ATLASSIAN_EMAIL=you@example.com ATLASSIAN_API_TOKEN=x bin/jira-multisite-mcp < /dev/null  # startup smoke test (omit the variables to test your .env)
 ```
 
 ## Architecture
 
 - `bin/jira-multisite-mcp`: the stdio entry point. It forces this repo's Gemfile, because clients launch it from arbitrary directories. Every startup failure becomes a stderr message naming the Ruby used, since clients only report "Connection closed".
 - `lib/jira_multisite.rb`: holds `VERSION`, the `TOOLS` list and `build_server(registry:)`. Global `guidelines` from `sites.yml` go into the server instructions. Per-site guidelines come back from `list_sites`.
+- `EnvFile`: fills missing environment variables from a `.env` file (next to `sites.yml`, then the repo root) before `Config` runs. Plain Ruby, `KEY=value` lines only. Called from `bin/`, never from `Config`, so tests keep injecting `env:`.
 - `Config`: parses `sites.yml`. Each site reads its token from an env var (`ATLASSIAN_API_TOKEN`, or the one named in `token_env`). `email` falls back to `ATLASSIAN_EMAIL`.
 - `Registry`: config plus one lazy `Client` per site, with the user's `accountId` cached per site. Tools get it through MCP `server_context[:registry]`, never a global, so the same tool classes can later run in a multi-user web app with a per-request registry.
 - `Client`: a thin REST v3 wrapper with an injectable HTTP adapter (`call(method, uri, headers, body) -> [status, body_string]`). A non-2xx response raises `ApiError` with a message written for the model.
@@ -37,7 +38,7 @@ ATLASSIAN_EMAIL=you@example.com ATLASSIAN_API_TOKEN=x bin/jira-multisite-mcp < /
 ## Project rules
 
 - Public repository: never commit tokens, real Jira site names, client names, emails or personal paths. Examples use `acme`, `alpha`, `beta`, `you@example.com`.
-- Tokens never go in `sites.yml` or in code; they come from environment variables.
+- Tokens never go in `sites.yml` or in code; they come from environment variables, set by the client or by a git-ignored `.env` file. Never log or echo a value, only variable names.
 - Single runtime dependency: the `mcp` gem. Use the standard library for HTTP, JSON and YAML; don't add gems.
 - Run `bundle exec rake test` before every commit. Tests use `FakeHttp`; never call a real Jira in tests.
 - CI runs Ruby 3.1 to 3.4, so don't use syntax newer than 3.1.
