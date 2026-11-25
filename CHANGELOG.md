@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-20
+
 ### Added
 
 - `list_versions` tool: a project's versions with status and release date.
@@ -15,6 +17,12 @@ All notable changes to this project are documented here. The format follows
 - When Jira rejects a fix version or a parent, the error tells Claude to
   call `list_versions` or search for epics.
 
+### Changed
+
+- README: register the server in Claude Code with the absolute path to Ruby,
+  so projects that pin another Ruby (mise, rbenv, asdf) don't break it.
+- The version now lives in a `VERSION` file at the repository root.
+
 ### Fixed
 
 - Startup failures now explain themselves in the client log (which Ruby was
@@ -22,12 +30,6 @@ All notable changes to this project are documented here. The format follows
   only as "Connection closed".
 - The server always uses its own Gemfile, even when launched from another
   project that sets `BUNDLE_GEMFILE`.
-
-### Changed
-
-- README: register the server in Claude Code with the absolute path to Ruby,
-  so projects that pin another Ruby (mise, rbenv, asdf) don't break it.
-- The version now lives in a `VERSION` file at the repository root.
 
 ## [0.1.0] - 2026-10-20
 
