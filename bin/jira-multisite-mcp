@@ -37,7 +37,13 @@ rescue StandardError, LoadError => e
              "Run `bundle install` in #{File.dirname(gemfile)} with this Ruby, or: #{RUBY_HINT}")
 end
 
+# Credentials may live in a .env file instead of the client's config.
+# Only variable names are logged, never values.
 begin
+  JiraMultisite::EnvFile.default_paths.each do |path|
+    names = JiraMultisite::EnvFile.load(path)
+    warn "jira-multisite-mcp: read #{names.join(', ')} from #{path}" if names.any?
+  end
   config = JiraMultisite::Config.load
 rescue JiraMultisite::ConfigError => e
   abort_with(e.message)

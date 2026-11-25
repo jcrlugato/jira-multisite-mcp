@@ -65,6 +65,8 @@ closes. It idles until Claude calls a tool. Memory use is a few tens of MB.
 
 ## Installation
 
+Clone the repository and install its gems:
+
 ```bash
 mkdir -p ~/code
 git clone https://github.com/jcrlugato/jira-multisite-mcp.git ~/code/jira-multisite-mcp
@@ -74,6 +76,20 @@ bundle install
 
 Any folder works, as long as its path doesn't change later: your Claude
 config points to it. Avoid folders synced by iCloud, Dropbox or Google Drive.
+
+Then, **in the same folder**, note the absolute path of the Ruby you just
+used. Steps 5 and 6 need it:
+
+```bash
+mise which ruby     # or: rbenv which ruby, asdf which ruby, which ruby
+# /Users/you/.local/share/mise/installs/ruby/3.4.7/bin/ruby
+```
+
+Claude starts the server without your shell profile, so it can't find a Ruby
+managed by mise, rbenv, asdf or chruby on its own, and the gems from
+`bundle install` exist only in this Ruby. Use the path with the exact
+version. Aliases such as mise's `installs/ruby/3` follow the newest Ruby you
+install, so the server breaks the next time you upgrade.
 
 ## Configuration
 
@@ -121,7 +137,38 @@ credentials:
     token_env: OTHER_CLIENT_ATLASSIAN_TOKEN   # name of the env variable
 ```
 
-### 3. Tell Claude how to write issues (optional, recommended)
+### 3. Save your credentials
+
+```bash
+cp .env.example ~/.config/jira-multisite-mcp/.env
+chmod 600 ~/.config/jira-multisite-mcp/.env
+```
+
+Open `~/.config/jira-multisite-mcp/.env` and fill in your email and the
+token from step 1:
+
+```bash
+ATLASSIAN_EMAIL=you@example.com
+ATLASSIAN_API_TOKEN=your-token
+```
+
+- The file sits next to `sites.yml`, outside the repository, so the token
+  can't end up in a commit. A `.env` at the repository root also works (git
+  ignores it); the one next to `sites.yml` wins.
+- `chmod 600` makes it readable only by you. The server warns in its log when
+  other users can read it. On Windows, skip this command.
+- The format is one `KEY=value` per line, with optional quotes and `#`
+  comments. Nothing else is supported.
+- The commented lines at the end of `.env.example` are only for a site under
+  a different Atlassian account (`token_env` in step 2). Delete them if you
+  don't need them.
+
+You can pass the variables through your MCP client's config instead (`-e` in
+Claude Code, `env` in Claude Desktop). A variable the client sets wins over
+the file. The downside: the apps show that config on screen, token included,
+and renewing the token means editing every client.
+
+### 4. Tell Claude how to write issues (optional, recommended)
 
 Without guidance, Claude writes reasonable issues. With guidance, it writes
 **your** issues. Add free-text `guidelines`, globally and per site:
@@ -164,97 +211,121 @@ Tips for good guidelines:
 Guidelines are read when the server starts. After editing, restart Claude
 Desktop or start a new Claude Code session.
 
-### 4. Connect it to Claude
+### 5. Test it by hand
+
+Before involving Claude, start the server the way Claude does: without your
+shell profile, from another folder, with the Ruby path from
+[Installation](#installation).
+
+```bash
+cd / && env -i HOME="$HOME" \
+  /absolute/path/to/ruby ~/code/jira-multisite-mcp/bin/jira-multisite-mcp < /dev/null
+```
+
+Expected output:
+
+```
+jira-multisite-mcp: read ATLASSIAN_EMAIL, ATLASSIAN_API_TOKEN from /Users/you/.config/jira-multisite-mcp/.env
+jira-multisite-mcp <version>: Ruby 3.4.7, sites acme, side-project
+```
+
+Anything else is a startup error that Claude would report only as
+"Connection closed"; see [Troubleshooting](#troubleshooting). This checks the
+config and that the variables are set, not that the token is valid: step 7
+does that. Without `< /dev/null` the server waits for a client; press Ctrl+C
+to stop it.
+
+### 6. Connect it to Claude
+
+Use the absolute Ruby path from [Installation](#installation) in every
+client. Credentials come from the `.env` file, so the client config holds no
+token.
 
 #### Claude Code
 
 ```bash
 claude mcp add jira-multisite -s user \
-  -e ATLASSIAN_EMAIL=you@example.com \
-  -e ATLASSIAN_API_TOKEN=your-token \
   -- /absolute/path/to/ruby ~/code/jira-multisite-mcp/bin/jira-multisite-mcp
 ```
 
 `-s user` makes it available in all your projects. Run `/mcp` inside Claude
 Code to check that `jira-multisite` is connected.
 
-**Use the absolute path to Ruby here too** (`mise which ruby`,
-`rbenv which ruby` or `which ruby`, run from the `jira-multisite-mcp`
-folder). Claude Code starts the server from the project you have open. If
-that project pins another Ruby with mise, rbenv, asdf or chruby, the version
-manager switches to it, that Ruby doesn't have the server's gems, and the
-server dies at startup: it works in some projects and shows
-"Connection closed" in others. An absolute path makes the server use the
-same Ruby everywhere.
+The absolute Ruby path matters even more here. Claude Code starts the server
+from the project you have open. If that project pins another Ruby with mise,
+rbenv, asdf or chruby, a bare `ruby` resolves to that version, which doesn't
+have the server's gems: the server works in some projects and shows
+"Connection closed" in others.
 
 #### Claude Desktop
 
-The config file is `~/Library/Application Support/Claude/claude_desktop_config.json`
-on macOS and `%APPDATA%\Claude\claude_desktop_config.json` on Windows. Add:
+1. **Quit the app (Cmd+Q).** It rewrites its config file while running and
+   can overwrite your change.
+2. **Add the server to the config file:**
+   `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
+   `%APPDATA%\Claude\claude_desktop_config.json` on Windows. The file may
+   already hold the app's own preferences: add the `mcpServers` key next to
+   them, don't replace the file. On macOS, this merges the entry and keeps a
+   backup:
+
+   ```bash
+   F="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+   RUBY=/absolute/path/to/ruby
+   SERVER="$HOME/code/jira-multisite-mcp/bin/jira-multisite-mcp"
+   [ -f "$F" ] || echo '{}' > "$F"
+   cp "$F" "$F.bak"
+   "$RUBY" -rjson -e '
+     f, ruby, server = ARGV
+     cfg = JSON.parse(File.read(f))
+     (cfg["mcpServers"] ||= {})["jira-multisite"] = { "command" => ruby, "args" => [server] }
+     File.write(f, JSON.pretty_generate(cfg) + "\n")
+   ' "$F" "$RUBY" "$SERVER"
+   "$RUBY" -rjson -e 'puts JSON.parse(File.read(ARGV[0]))["mcpServers"]["jira-multisite"]' "$F"
+   ```
+
+   The last line prints the entry. To undo: `cp "$F.bak" "$F"`.
+3. **Reopen the app** and check that `jira-multisite` shows as running in its
+   MCP server settings.
+
+To edit the file by hand instead, the entry is:
 
 ```json
 {
   "mcpServers": {
     "jira-multisite": {
       "command": "/absolute/path/to/ruby",
-      "args": ["/Users/you/code/jira-multisite-mcp/bin/jira-multisite-mcp"],
-      "env": {
-        "ATLASSIAN_EMAIL": "you@example.com",
-        "ATLASSIAN_API_TOKEN": "your-token"
-      }
+      "args": ["/Users/you/code/jira-multisite-mcp/bin/jira-multisite-mcp"]
     }
   }
 }
 ```
 
-Three things trip people up:
-
-1. **Use the absolute path to Ruby.** Claude Desktop does not load your shell
-   profile, so a Ruby from mise, rbenv, asdf or chruby is not on its `PATH`.
-   Get the path with `mise which ruby` (or `rbenv which ruby`, `which ruby`).
-2. **The file may already exist** with the app's own preferences. Add the
-   `mcpServers` key next to them; don't replace the file. The script below
-   does the merge for you.
-3. **Quit the app (Cmd+Q) before editing**, then reopen it. The app rewrites
-   the file and can overwrite your change if it is running.
-
-Merge script (macOS). Run the first line on its own, paste your token when
-asked (it is not echoed), then paste the rest. Adjust the two paths first.
+The app's button to edit the config only reveals the file in Finder; open it
+with `open -e "$F"` or your editor. A hand edit often drops a `}` or leaves a
+trailing comma, and then the app silently ignores the server. Check the JSON
+before reopening the app:
 
 ```bash
-printf "Atlassian token: "; read -s ATLASSIAN_API_TOKEN; echo; export ATLASSIAN_API_TOKEN
+ruby -rjson -e 'JSON.parse(File.read(ARGV[0])); puts "JSON ok"' "$F"
 ```
 
-```bash
-F="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-[ -f "$F" ] || echo '{}' > "$F"
-cp "$F" "$F.bak"
-ruby -rjson -e '
-  f = ARGV[0]
-  cfg = JSON.parse(File.read(f))
-  cfg["mcpServers"] ||= {}
-  cfg["mcpServers"]["jira-multisite"] = {
-    "command" => "/absolute/path/to/ruby",
-    "args"    => ["/Users/you/code/jira-multisite-mcp/bin/jira-multisite-mcp"],
-    "env"     => {
-      "ATLASSIAN_EMAIL"     => "you@example.com",
-      "ATLASSIAN_API_TOKEN" => ENV.fetch("ATLASSIAN_API_TOKEN")
-    }
-  }
-  File.write(f, JSON.pretty_generate(cfg) + "\n")
-' "$F"
-ruby -rjson -e 'puts JSON.parse(File.read(ARGV[0]))["mcpServers"].keys' "$F"
-```
+#### Already passing the token in the client config?
 
-The last line should print `jira-multisite`. To undo: `cp "$F.bak" "$F"`.
+Move the values to the `.env` file (step 3), then remove them from the
+client, because a variable the client sets wins over the file:
+
+- Claude Code: `claude mcp remove jira-multisite -s user`, then the
+  `claude mcp add` command above.
+- Claude Desktop: delete the `"env": { ... }` block from the entry, along
+  with the comma before it, check the JSON and restart the app.
 
 #### Other MCP clients
 
 Any client that runs stdio servers works (Cursor, Windsurf, Zed...). The
-command is `bin/jira-multisite-mcp` (or `ruby bin/jira-multisite-mcp`), with
-`ATLASSIAN_EMAIL` and `ATLASSIAN_API_TOKEN` in its environment.
+command is the absolute Ruby path, with `bin/jira-multisite-mcp` as its
+argument. Credentials come from the `.env` file.
 
-### 5. Check it
+### 7. Check it
 
 Ask, in this order. Each step tests one layer:
 
@@ -301,10 +372,11 @@ Details worth knowing:
 - A classic Atlassian API token has **no scopes**: it can do everything your
   account can, on every site, including clients' sites. Treat it like a
   password.
-- The token is stored in plain text in your client config
-  (`~/.claude.json` for Claude Code, `claude_desktop_config.json` for
+- The token is stored in plain text, in your `.env` file or in your client
+  config (`~/.claude.json` for Claude Code, `claude_desktop_config.json` for
   Claude Desktop). Keep those files out of dotfile repositories and backups
-  you share.
+  you share. Prefer the `.env` file with `chmod 600`: the server warns in its
+  log when other users can read it, and the apps don't show it on screen.
 - `sites.yml` never holds tokens and `list_sites` never returns them.
 - The server only talks to the `https://` URLs in your `sites.yml`. Nothing
   is sent anywhere else, and nothing is cached on disk.
@@ -328,11 +400,12 @@ one site fails, the token is fine and your account lost access to that site.
 **Renewing:**
 
 1. Create a new token on the same Atlassian page.
-2. Replace it in your client:
-   - Claude Code: `claude mcp remove jira-multisite`, then the `claude mcp add`
-     command above with the new token.
-   - Claude Desktop: run the merge script again, or edit
-     `ATLASSIAN_API_TOKEN` in the config, then quit and reopen the app.
+2. Replace it where you keep it:
+   - `.env` file: edit `ATLASSIAN_API_TOKEN`, then restart Claude Desktop or
+     start a new Claude Code session.
+   - Client config, if you pass it there: edit `ATLASSIAN_API_TOKEN` in the
+     `-e` flag (Claude Code: remove and add the server again) or in the `env`
+     block (Claude Desktop), then restart the client.
 3. Check with "List the projects on <site>".
 4. Revoke the old token.
 
@@ -340,19 +413,15 @@ one site fails, the token is fine and your account lost access to that site.
 
 Diagnostics go to stderr. Claude Desktop saves them in
 `~/Library/Logs/Claude/mcp-server-jira-multisite.log`; Claude Code shows the
-server status in `/mcp`. Run the server by hand to see startup errors:
-
-```bash
-ATLASSIAN_EMAIL=you@example.com ATLASSIAN_API_TOKEN=x \
-  ~/code/jira-multisite-mcp/bin/jira-multisite-mcp < /dev/null
-```
-
-It prints the loaded sites and exits. Common problems:
+server status in `/mcp`. To see startup errors, run the server by hand as
+in [Test it by hand](#5-test-it-by-hand). Common problems:
 
 | Symptom | Cause and fix |
 |---|---|
 | `Sites file not found` | Create `~/.config/jira-multisite-mcp/sites.yml`, or set `JIRA_SITES_FILE`. |
-| `environment variable ATLASSIAN_API_TOKEN is empty` | The client config lacks the `env` entry, or the variable name in `token_env` is wrong. |
+| `environment variable ATLASSIAN_API_TOKEN is empty` | No `.env` file where the server looks (next to `sites.yml`, or the repository root) and no `env` entry in the client config, or the variable name in `token_env` is wrong. When a `.env` is used, the log shows `read ... from <path>`. |
+| `.env, line N: expected KEY=value` | That line of the `.env` file is not `KEY=value`. Values must fit on one line. |
+| "Server disconnected" / "Connection closed" right after upgrading Ruby | The client points to a Ruby alias (like mise's `installs/ruby/3`) that now resolves to the new Ruby, which lacks the gems. Point it to the exact version and run `bundle install` with that Ruby. |
 | Server never appears in Claude Desktop | Ruby path not absolute, JSON invalid, or the app was open while you edited. Check the log file. |
 | Works in some Claude Code projects, "Connection closed" in others | Those projects pin another Ruby and your version manager switches to it. Register the server with the absolute path to Ruby (see [Claude Code](#claude-code)). The log line `could not load its gems` shows which Ruby was used. |
 | `could not load its gems` / `cannot load such file -- mcp` | `bundle install` not run, or Claude uses a different Ruby than the one you installed the gems with. Use the absolute path to Ruby in the client config. After upgrading Ruby, run `bundle install` again. |
@@ -391,6 +460,7 @@ schema validation included, against a fake HTTP adapter.
 bin/jira-multisite-mcp          stdio entry point
 lib/jira_multisite.rb           server setup, tool list, instructions
 lib/jira_multisite/config.rb    sites.yml, guidelines and credentials
+lib/jira_multisite/env_file.rb  .env loader (credentials outside the client config)
 lib/jira_multisite/client.rb    Jira REST v3 client, injectable HTTP adapter
 lib/jira_multisite/adf.rb       plain text <-> Atlassian Document Format
 lib/jira_multisite/registry.rb  per-site clients, handed to tools via server_context

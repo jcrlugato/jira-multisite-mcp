@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Credentials can live in a `.env` file, next to `sites.yml` or at the
+  repository root, instead of the MCP client's config. Variables the client
+  sets still win. The server warns when other users can read the file.
+- `.env.example` to copy from.
+
+### Changed
+
+- The "environment variable ... is empty" error now says where to set it.
+- README: installation reorganized around the `.env` file, with a step to
+  note the exact Ruby path, a hand test that starts the server the way Claude
+  does, a token-free Claude Desktop merge script and how to move an existing
+  setup off the client config.
+
 ## [0.2.0] - 2026-10-20
 
 ### Added
